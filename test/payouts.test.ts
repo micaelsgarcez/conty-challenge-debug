@@ -66,6 +66,33 @@ describe("aprovação da entrega", () => {
     expect(body.ledger).toHaveLength(1);
   });
 
+  it("não credita de novo quando o retry traz a chave com caractere invisível", async () => {
+    const payload = {
+      mission_id: "msn_2044",
+      approved_at: "2026-03-12T21:05:00.000Z",
+      idempotency_key: "pay_7c1",
+    };
+    expect((await postJson(app, "/approvals", payload)).status).toBe(201);
+    const retry = await postJson(app, "/approvals", { ...payload, idempotency_key: "pay_7c1​" });
+    expect(retry.status).toBe(200);
+    const mission = await app.request("/missions/msn_2044");
+    const body = (await mission.json()) as { ledger: unknown[] };
+    expect(body.ledger).toHaveLength(1);
+  });
+
+  it("credita a missão uma única vez mesmo com outra chave", async () => {
+    const payload = {
+      mission_id: "msn_2044",
+      approved_at: "2026-03-12T21:05:00.000Z",
+      idempotency_key: "pay_a",
+    };
+    expect((await postJson(app, "/approvals", payload)).status).toBe(201);
+    expect((await postJson(app, "/approvals", { ...payload, idempotency_key: "pay_b" })).status).toBe(200);
+    const mission = await app.request("/missions/msn_2044");
+    const body = (await mission.json()) as { ledger: unknown[] };
+    expect(body.ledger).toHaveLength(1);
+  });
+
   it("aceita a mesma chave uma única vez", async () => {
     const payload = {
       mission_id: "msn_2044",
